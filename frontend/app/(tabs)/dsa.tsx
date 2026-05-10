@@ -3,7 +3,6 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Linking, Activity
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../services/supabase';
 import { fetchProfile, upsertProfile, fetchLCProgress, upsertLCProgress, type LCProgress } from '../../services/db';
 import { fetchLCStats, type LCStats } from '../../services/leetcode';
@@ -15,10 +14,10 @@ const DEFAULT_CATEGORIES: LCProgress[] = Object.entries(PROBLEMS).map(([cat, pro
 }));
 
 const CONTESTS = [
-  { name: 'LeetCode Weekly',    icon: 'trophy-outline',   color: C.warn,    url: 'https://leetcode.com/contest/' },
-  { name: 'LeetCode Biweekly', icon: 'calendar-outline',  color: C.primary, url: 'https://leetcode.com/contest/' },
-  { name: 'Codeforces Rounds', icon: 'flash-outline',     color: C.danger,  url: 'https://codeforces.com/contests' },
-  { name: 'NeetCode Practice', icon: 'map-outline',       color: C.accent,  url: 'https://neetcode.io/roadmap' },
+  { name: 'LeetCode Weekly',   icon: 'trophy-outline',   color: C.warn,    url: 'https://leetcode.com/contest/' },
+  { name: 'LeetCode Biweekly', icon: 'calendar-outline', color: C.primary, url: 'https://leetcode.com/contest/' },
+  { name: 'Codeforces Rounds', icon: 'flash-outline',    color: C.danger,  url: 'https://codeforces.com/contests' },
+  { name: 'NeetCode Practice', icon: 'map-outline',      color: C.accent,  url: 'https://neetcode.io/roadmap' },
 ];
 
 export default function DSAScreen() {
@@ -28,6 +27,7 @@ export default function DSAScreen() {
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId]         = useState('');
+  const [selectedCat, setSelectedCat] = useState<string | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -44,17 +44,14 @@ export default function DSAScreen() {
       }
       const merged = DEFAULT_CATEGORIES.map(def => dbProgress.find(p => p.category === def.category) ?? def);
       setProgress(merged);
+      // auto-select first incomplete
+      const first = merged.find(p => p.solved < p.total);
+      if (first) setSelectedCat(first.category);
     } catch { /* keep stale */ }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
   useEffect(() => { load(); }, []);
-
-  const nextTopic = (): LCProgress | null => {
-    const incomplete = progress.filter(p => p.solved < p.total);
-    if (!incomplete.length) return null;
-    return incomplete.reduce((a, b) => (a.solved / a.total) <= (b.solved / b.total) ? a : b);
-  };
 
   async function incrementSolved(cat: LCProgress) {
     if (cat.solved >= cat.total) return;
@@ -63,9 +60,20 @@ export default function DSAScreen() {
     await upsertLCProgress(userId, cat.category, next, cat.total);
   }
 
-  const next = nextTopic();
-  const totalSolved  = progress.reduce((s, p) => s + p.solved, 0);
+  const totalSolved   = progress.reduce((s, p) => s + p.solved, 0);
   const totalProblems = progress.reduce((s, p) => s + p.total, 0);
+
+  // incomplete first, done last
+  const sorted = [...progress].sort((a, b) => {
+    const aDone = a.solved >= a.total;
+    const bDone = b.solved >= b.total;
+    if (aDone !== bDone) return aDone ? 1 : -1;
+    return (a.solved / a.total) - (b.solved / b.total);
+  });
+
+  const activeCat   = selectedCat ? progress.find(p => p.category === selectedCat) : null;
+  const activeProbs = selectedCat ? (PROBLEMS[selectedCat] ?? []) : [];
+  const activeColor = selectedCat ? (CAT_COLOR[selectedCat] ?? C.primary) : C.primary;
 
   return (
     <SafeAreaView style={s.safe}>
@@ -108,7 +116,7 @@ export default function DSAScreen() {
           </View>
         )}
 
-        {/* NeetCode 150 progress */}
+        {/* Overall progress */}
         <View style={[s.neetCard, glow(C.primary, 0.12)]}>
           <View style={s.neetTop}>
             <Text style={s.neetTitle}>NeetCode 150 Roadmap</Text>
@@ -117,28 +125,102 @@ export default function DSAScreen() {
           <View style={s.neetBarTrack}>
             <View style={[s.neetBarFill, { width: `${totalProblems ? (totalSolved / totalProblems) * 100 : 0}%` as any }]} />
           </View>
-          <Text style={s.neetHint}>12 topics · tap any category to view problems</Text>
+          <Text style={s.neetHint}>{sorted.filter(p => p.solved >= p.total).length} of {sorted.length} topics complete</Text>
         </View>
 
-        {/* Continue banner */}
-        {next && (
-          <TouchableOpacity
-            style={[s.continueBanner, glow(C.primary, 0.15)]} activeOpacity={0.85}
-            onPress={() => router.push({ pathname: '/dsa-category' as any, params: { category: next.category } })}
-          >
-            <View style={s.continueLeft}>
-              <Ionicons name="play-circle" size={22} color={C.primary} />
-              <View>
-                <Text style={s.continueTitle}>Continue → {next.category}</Text>
-                <Text style={s.continueSub}>{next.solved}/{next.total} done · {Math.round((next.solved / next.total) * 100)}% complete</Text>
+        {/* Horizontal topic chips */}
+        <Text style={s.section}>Topics</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipBar} contentContainerStyle={s.chipContent}>
+          {sorted.map(cat => {
+            const done    = cat.solved >= cat.total;
+            const color   = CAT_COLOR[cat.category] ?? C.primary;
+            const active  = selectedCat === cat.category;
+            const pct     = cat.total > 0 ? Math.round((cat.solved / cat.total) * 100) : 0;
+            return (
+              <TouchableOpacity
+                key={cat.category}
+                style={[s.chip, active && { borderColor: color, backgroundColor: color + '18' }, done && s.chipDone]}
+                onPress={() => setSelectedCat(cat.category)}
+                activeOpacity={0.75}
+              >
+                {done && <Ionicons name="checkmark-circle" size={12} color={C.accent} />}
+                <Text style={[s.chipText, active && { color }, done && { color: C.muted }]} numberOfLines={1}>
+                  {cat.category}
+                </Text>
+                <Text style={[s.chipPct, { color: active ? color : C.muted }]}>{pct}%</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Selected category problems */}
+        {activeCat && (
+          <View style={s.catSection}>
+            <View style={s.catHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.catName, { color: activeColor }]}>{activeCat.category}</Text>
+                <Text style={s.catMeta}>{activeCat.solved}/{activeCat.total} solved</Text>
               </View>
+              <TouchableOpacity
+                style={[s.openBtn, { backgroundColor: activeColor + '18', borderColor: activeColor + '40' }]}
+                onPress={() => router.push({ pathname: '/dsa-category' as any, params: { category: activeCat.category } })}
+              >
+                <Text style={[s.openBtnText, { color: activeColor }]}>Open all</Text>
+                <Ionicons name="arrow-forward" size={13} color={activeColor} />
+              </TouchableOpacity>
             </View>
-            <Ionicons name="arrow-forward" size={18} color={C.primary} />
-          </TouchableOpacity>
+
+            {/* Progress bar */}
+            <View style={s.catBarTrack}>
+              <View style={[s.catBarFill, { width: `${activeCat.total > 0 ? (activeCat.solved / activeCat.total) * 100 : 0}%` as any, backgroundColor: activeColor }]} />
+            </View>
+
+            {/* Show next 5 unsolved problems */}
+            <View style={s.problemList}>
+              {activeProbs
+                .filter((_, i) => i >= activeCat.solved)
+                .slice(0, 5)
+                .map((prob, i) => (
+                  <View key={i} style={[s.probRow, i === 0 && s.probRowFirst]}>
+                    <View style={[s.diffDot, { backgroundColor: DIFF_COLOR[prob.difficulty] + '25' }]}>
+                      <Text style={[s.diffDotText, { color: DIFF_COLOR[prob.difficulty] }]}>
+                        {prob.difficulty[0]}
+                      </Text>
+                    </View>
+                    <Text style={s.probName}>{prob.name}</Text>
+                    <TouchableOpacity
+                      style={[s.notesBtn]}
+                      onPress={() => router.push({ pathname: '/dsa-notes' as any, params: { problem: prob.name, category: activeCat.category } })}
+                    >
+                      <Ionicons name="create-outline" size={12} color={C.primary} />
+                      <Text style={s.notesBtnText}>Notes</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
+              }
+              {activeCat.solved >= activeCat.total && (
+                <View style={s.doneMsg}>
+                  <Ionicons name="trophy" size={20} color={C.accent} />
+                  <Text style={s.doneMsgText}>All done! Pick another topic above.</Text>
+                </View>
+              )}
+            </View>
+
+            {activeCat.solved < activeCat.total && (
+              <TouchableOpacity
+                style={[s.markBtn, { borderColor: activeColor + '40', backgroundColor: activeColor + '14' }]}
+                onPress={() => incrementSolved(activeCat)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle-outline" size={16} color={activeColor} />
+                <Text style={[s.markBtnText, { color: activeColor }]}>Mark next as solved</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
 
         {/* Contests */}
-        <Text style={s.section}>Competitions</Text>
+        <Text style={[s.section, { marginTop: 24 }]}>Competitions</Text>
         <View style={s.contestGrid}>
           {CONTESTS.map(c => (
             <TouchableOpacity key={c.name} style={[s.contestCard, { borderColor: c.color + '40' }]} activeOpacity={0.8} onPress={() => Linking.openURL(c.url)}>
@@ -151,110 +233,71 @@ export default function DSAScreen() {
           ))}
         </View>
 
-        {/* Category drills */}
-        <Text style={s.section}>Drill Progress  <Text style={s.sectionHint}>tap to open</Text></Text>
-        <View style={{ gap: 8, paddingBottom: 32 }}>
-          {progress.map(cat => {
-            const problems   = PROBLEMS[cat.category] ?? [];
-            const pct        = cat.total > 0 ? (cat.solved / cat.total) * 100 : 0;
-            const isNext     = next?.category === cat.category;
-            const color      = CAT_COLOR[cat.category] ?? C.primary;
-            const diffCounts = problems.reduce((acc, p) => { acc[p.difficulty] = (acc[p.difficulty] || 0) + 1; return acc; }, {} as Record<string, number>);
-
-            return (
-              <TouchableOpacity
-                key={cat.category}
-                style={[s.catCard, isNext && { borderColor: color + '60' }]}
-                activeOpacity={0.75}
-                onPress={() => router.push({ pathname: '/dsa-category' as any, params: { category: cat.category } })}
-              >
-                <View style={[s.catStrip, { backgroundColor: color }]} />
-                <View style={s.catLeft}>
-                  <View style={s.catTopRow}>
-                    <Text style={s.catName}>{cat.category}</Text>
-                    {isNext && <View style={[s.nextPill, { backgroundColor: color + '20' }]}><Text style={[s.nextPillText, { color }]}>continue</Text></View>}
-                  </View>
-                  <Text style={s.catMeta}>{cat.solved}/{cat.total} solved</Text>
-                  <View style={s.barTrack}>
-                    <View style={[s.barFill, { width: `${pct}%` as any, backgroundColor: color }]} />
-                  </View>
-                  <View style={s.diffRow}>
-                    {Object.entries(diffCounts).map(([d, n]) => (
-                      <Text key={d} style={[s.diffTag, { color: DIFF_COLOR[d] }]}>{n} {d}</Text>
-                    ))}
-                  </View>
-                </View>
-                <View style={s.catRight}>
-                  <TouchableOpacity
-                    style={[s.plusBtn, { backgroundColor: color + '18', borderColor: color + '40' }]}
-                    onPress={(e) => { e.stopPropagation(); incrementSolved(cat); }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="add" size={16} color={color} />
-                  </TouchableOpacity>
-                  <Ionicons name="chevron-forward" size={16} color={C.muted} style={{ marginTop: 8 }} />
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  safe:            { flex: 1, backgroundColor: C.bg },
-  scroll:          { flex: 1, paddingHorizontal: 16 },
-  header:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 16 },
-  title:           { color: C.text, fontSize: 24, fontWeight: '700' },
-  sub:             { color: C.sub, fontSize: 12, marginTop: 4 },
-  heroBadge:       { backgroundColor: C.surface, borderWidth: 1, borderColor: C.accent + '50', borderRadius: 18, paddingHorizontal: 18, paddingVertical: 12, alignItems: 'center' },
-  heroNum:         { color: C.accent, fontWeight: '800', fontSize: 32, lineHeight: 36 },
-  heroLbl:         { color: C.muted, fontSize: 11, marginTop: 2 },
-  promptCard:      { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.surface, borderWidth: 1, borderColor: C.primary + '50', borderRadius: 18, padding: 16, marginBottom: 16 },
-  promptTitle:     { color: C.text, fontWeight: '700', fontSize: 14 },
-  promptSub:       { color: C.muted, fontSize: 12, marginTop: 2 },
-  statsRow:        { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  statCard:        { flex: 1, backgroundColor: C.surface, borderWidth: 1, borderRadius: 14, padding: 12, alignItems: 'center' },
-  statNum:         { color: C.text, fontWeight: '800', fontSize: 20 },
-  statLbl:         { color: C.muted, fontSize: 10, marginTop: 3 },
-  neetCard:        { backgroundColor: C.surface, borderWidth: 1, borderColor: C.primary + '40', borderRadius: 18, padding: 16, marginBottom: 16 },
-  neetTop:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  neetTitle:       { color: C.text, fontWeight: '700', fontSize: 14 },
-  neetCount:       { color: C.primary, fontWeight: '800', fontSize: 14 },
-  neetBarTrack:    { height: 6, backgroundColor: C.border, borderRadius: 99, overflow: 'hidden', marginBottom: 8 },
-  neetBarFill:     { height: '100%', backgroundColor: C.primary, borderRadius: 99 },
-  neetHint:        { color: C.muted, fontSize: 11 },
-  continueBanner:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.surface, borderWidth: 1, borderColor: C.primary + '50', borderRadius: 18, padding: 16, marginBottom: 20 },
-  continueLeft:    { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  continueTitle:   { color: C.text, fontWeight: '700', fontSize: 14 },
-  continueSub:     { color: C.muted, fontSize: 12, marginTop: 2 },
-  section:         { color: C.text, fontWeight: '700', fontSize: 16, marginBottom: 12 },
-  sectionHint:     { color: C.muted, fontWeight: '400', fontSize: 11 },
-  contestGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
-  contestCard:     { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, width: '47%' },
-  contestIcon:     { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  contestName:     { flex: 1, color: C.text, fontSize: 12, fontWeight: '600' },
-  catCard:         { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 16, overflow: 'hidden' },
-  catStrip:        { width: 4, alignSelf: 'stretch' },
-  catLeft:         { flex: 1, padding: 14, paddingLeft: 12 },
-  catTopRow:       { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  catName:         { color: C.text, fontWeight: '600', fontSize: 14 },
-  nextPill:        { backgroundColor: C.primary + '20', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-  nextPillText:    { color: C.primary, fontSize: 10, fontWeight: '700' },
-  catMeta:         { color: C.muted, fontSize: 12, marginBottom: 6 },
-  barTrack:        { height: 4, backgroundColor: C.border, borderRadius: 99, overflow: 'hidden', marginBottom: 6 },
-  barFill:         { height: '100%', backgroundColor: C.primary, borderRadius: 99 },
-  diffRow:         { flexDirection: 'row', gap: 10 },
-  diffTag:         { fontSize: 11, fontWeight: '600' },
-  catRight:        { alignItems: 'center', gap: 4, paddingRight: 14, paddingLeft: 8 },
-  plusBtn:         { width: 30, height: 30, borderRadius: 9, backgroundColor: C.primary + '18', borderWidth: 1, borderColor: C.primary + '40', alignItems: 'center', justifyContent: 'center' },
-  problemList:     { backgroundColor: C.surface, borderWidth: 1, borderTopWidth: 0, borderColor: C.border, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, overflow: 'hidden' },
-  problemRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.border },
-  diffDot:         { width: 24, height: 24, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  diffDotText:     { fontSize: 11, fontWeight: '800' },
-  probName:        { flex: 1, color: C.text, fontSize: 13 },
-  notesBtn:        { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.primary + '14', borderWidth: 1, borderColor: C.primary + '40', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
-  notesBtnText:    { color: C.primary, fontSize: 12, fontWeight: '600' },
+  safe:        { flex: 1, backgroundColor: C.bg },
+  scroll:      { flex: 1, paddingHorizontal: 16 },
+  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 16 },
+  title:       { color: C.text, fontSize: 24, fontWeight: '700' },
+  sub:         { color: C.sub, fontSize: 12, marginTop: 4 },
+  heroBadge:   { backgroundColor: C.surface, borderWidth: 1, borderColor: C.accent + '50', borderRadius: 18, paddingHorizontal: 18, paddingVertical: 12, alignItems: 'center' },
+  heroNum:     { color: C.accent, fontWeight: '800', fontSize: 32, lineHeight: 36 },
+  heroLbl:     { color: C.muted, fontSize: 11, marginTop: 2 },
+  promptCard:  { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.surface, borderWidth: 1, borderColor: C.primary + '50', borderRadius: 18, padding: 16, marginBottom: 16 },
+  promptTitle: { color: C.text, fontWeight: '700', fontSize: 14 },
+  promptSub:   { color: C.muted, fontSize: 12, marginTop: 2 },
+  statsRow:    { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  statCard:    { flex: 1, backgroundColor: C.surface, borderWidth: 1, borderRadius: 14, padding: 12, alignItems: 'center' },
+  statNum:     { color: C.text, fontWeight: '800', fontSize: 20 },
+  statLbl:     { color: C.muted, fontSize: 10, marginTop: 3 },
+  neetCard:    { backgroundColor: C.surface, borderWidth: 1, borderColor: C.primary + '40', borderRadius: 18, padding: 16, marginBottom: 20 },
+  neetTop:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  neetTitle:   { color: C.text, fontWeight: '700', fontSize: 14 },
+  neetCount:   { color: C.primary, fontWeight: '800', fontSize: 14 },
+  neetBarTrack:{ height: 6, backgroundColor: C.border, borderRadius: 99, overflow: 'hidden', marginBottom: 8 },
+  neetBarFill: { height: '100%', backgroundColor: C.primary, borderRadius: 99 },
+  neetHint:    { color: C.muted, fontSize: 11 },
+  section:     { color: C.text, fontWeight: '700', fontSize: 16, marginBottom: 10 },
+
+  // Horizontal chips
+  chipBar:     { marginBottom: 16 },
+  chipContent: { gap: 8, paddingRight: 4 },
+  chip:        { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  chipDone:    { opacity: 0.6 },
+  chipText:    { color: C.muted, fontSize: 12, fontWeight: '600', maxWidth: 110 },
+  chipPct:     { fontSize: 11, fontWeight: '700' },
+
+  // Category detail
+  catSection:  { backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 20, padding: 16, marginBottom: 8 },
+  catHeader:   { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  catName:     { fontWeight: '700', fontSize: 16 },
+  catMeta:     { color: C.muted, fontSize: 12, marginTop: 2 },
+  openBtn:     { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
+  openBtnText: { fontSize: 12, fontWeight: '700' },
+  catBarTrack: { height: 5, backgroundColor: C.border, borderRadius: 99, overflow: 'hidden', marginBottom: 14 },
+  catBarFill:  { height: '100%', borderRadius: 99 },
+
+  problemList:  { gap: 0, borderWidth: 1, borderColor: C.border, borderRadius: 14, overflow: 'hidden', marginBottom: 12 },
+  probRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border },
+  probRowFirst: { borderTopWidth: 0 },
+  diffDot:      { width: 24, height: 24, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  diffDotText:  { fontSize: 11, fontWeight: '800' },
+  probName:     { flex: 1, color: C.text, fontSize: 13 },
+  notesBtn:     { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.primary + '14', borderWidth: 1, borderColor: C.primary + '40', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  notesBtnText: { color: C.primary, fontSize: 12, fontWeight: '600' },
+  doneMsg:      { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 16 },
+  doneMsgText:  { color: C.muted, fontSize: 13 },
+
+  markBtn:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 12, paddingVertical: 11 },
+  markBtnText:  { fontSize: 13, fontWeight: '700' },
+
+  contestGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
+  contestCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, width: '47%' },
+  contestIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  contestName: { flex: 1, color: C.text, fontSize: 12, fontWeight: '600' },
 });

@@ -4,13 +4,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
 import { supabase } from '../../services/supabase';
 import { fetchStreak, fetchTodayTasks, toggleTask, deleteTask, replaceOpenTasks, fetchProfile, addTasks, type Task } from '../../services/db';
 import { useFocusEffect } from 'expo-router';
 import { ENV } from '../../config/env';
 import { C, TAG_COLORS, glow } from '../../config/theme';
 import { getTodaysConcept } from '../../services/learn-data';
+import { setupNotificationHandler, requestNotificationPermission, scheduleAllTaskNotifications, cancelTaskNotification, notifyTasksReady } from '../../services/notifications';
+import { PROBLEMS, CAT_COLOR, DIFF_COLOR } from '../../services/dsa-data';
+
+const ALL_PROBLEMS = Object.entries(PROBLEMS).flatMap(([cat, probs]) => probs.map(p => ({ ...p, category: cat })));
+const DAY_IDX      = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 1).getTime()) / 86400000);
+const DSA_TODAY    = ALL_PROBLEMS[DAY_IDX % ALL_PROBLEMS.length];
 
 const DATE    = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 const CONCEPT = getTodaysConcept();
@@ -27,11 +32,14 @@ export default function TodayScreen() {
   const [tasks, setTasks]           = useState<Task[]>([]);
   const [firstName, setFirstName]   = useState('');
   const [lcSolved, setLcSolved]     = useState<number | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [userId, setUserId]         = useState('');
-  const [profile, setProfile]       = useState<{ stack: string[]; goal: string; experience: string } | null>(null);
+  const [generating, setGenerating]   = useState(false);
+  const [userId, setUserId]           = useState('');
+  const [profile, setProfile]         = useState<{ stack: string[]; goal: string; experience: string } | null>(null);
+  const [learnedCount, setLearnedCount] = useState(0);
 
   useEffect(() => {
+    setupNotificationHandler();
+    requestNotificationPermission();
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
       setUserId(user.id);
@@ -40,13 +48,19 @@ export default function TodayScreen() {
 
   const loadData = useCallback(async () => {
     if (!userId) return;
-    const [s, t, p] = await Promise.all([
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const [s, t, p, lc] = await Promise.all([
       fetchStreak(userId),
       fetchTodayTasks(userId),
       fetchProfile(userId),
+      supabase.from('daily_learns').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('learned_at', weekStart.toISOString().split('T')[0]),
     ]);
     setStreak(s);
     setTasks(t);
+    setLearnedCount(lc.count ?? 0);
+    scheduleAllTaskNotifications(t);
+    notifyTasksReady(t);
     if (p?.full_name) setFirstName(p.full_name.split(' ')[0]);
     if (p?.leetcode_solved != null) setLcSolved(p.leetcode_solved);
     if (p) setProfile({ stack: p.primary_stack ?? [], goal: p.career_goal ?? '', experience: p.experience_years != null ? String(p.experience_years) : '' });
@@ -58,6 +72,7 @@ export default function TodayScreen() {
   async function handleToggle(task: Task) {
     const updated = !task.done;
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: updated } : t));
+    if (updated) cancelTaskNotification(task.id);
     try { await toggleTask(task.id, updated); }
     catch { setTasks(prev => prev.map(t => t.id === task.id ? { ...t, done: task.done } : t)); }
   }
@@ -70,6 +85,7 @@ export default function TodayScreen() {
         onPress: async () => {
           const prev = tasks;
           setTasks(p => p.filter(t => t.id !== taskId));
+          cancelTaskNotification(taskId);
           try { await deleteTask(taskId); }
           catch { setTasks(prev); }
         },
@@ -91,7 +107,9 @@ export default function TodayScreen() {
       if (data.tasks.length) {
         if (tasks.length > 0) await replaceOpenTasks(userId, data.tasks);
         else await addTasks(userId, data.tasks);
-        setTasks(await fetchTodayTasks(userId));
+        const fresh = await fetchTodayTasks(userId);
+        setTasks(fresh);
+        notifyTasksReady(fresh);
       } else {
         Alert.alert('No tasks generated', 'Try again or add manually.');
       }
@@ -108,7 +126,7 @@ export default function TodayScreen() {
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
 
         {/* Header */}
-        <Animated.View entering={FadeInDown.delay(0).duration(350)} style={s.header}>
+        <View style={s.header}>
           <View>
             <Text style={s.date}>{DATE}</Text>
             <Text style={s.greeting}>{greeting()}{firstName ? `, ${firstName}` : ''} 👋</Text>
@@ -118,10 +136,10 @@ export default function TodayScreen() {
             <Text style={s.streakNum}>{streak}</Text>
             <Text style={s.streakLbl}>streak</Text>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
 
         {/* Stats row */}
-        <Animated.View entering={FadeInDown.delay(60).duration(350)} style={s.statsRow}>
+        <View style={s.statsRow}>
           <View style={s.stat}>
             <Text style={s.statNum}>{done}<Text style={s.statSlash}>/{total}</Text></Text>
             <Text style={s.statLbl}>Tasks done</Text>
@@ -134,10 +152,10 @@ export default function TodayScreen() {
             <Text style={[s.statNum, { color: C.accent }]}>{lcSolved ?? '—'}</Text>
             <Text style={s.statLbl}>DSA solved</Text>
           </View>
-        </Animated.View>
+        </View>
 
         {/* Daily Concept Card */}
-        <Animated.View entering={FadeInDown.delay(120).duration(400)}>
+        <View>
           <TouchableOpacity
             activeOpacity={0.88}
             onPress={() => router.push({ pathname: '/daily-learn' as any, params: { conceptId: CONCEPT.id } })}
@@ -169,18 +187,18 @@ export default function TodayScreen() {
               </View>
             </LinearGradient>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
 
         {/* Tasks header */}
-        <Animated.View entering={FadeInDown.delay(180).duration(350)} style={s.sectionRow}>
+        <View style={s.sectionRow}>
           <Text style={s.section}>Today's Tasks</Text>
           <TouchableOpacity style={s.addBtn} onPress={() => router.push('/add-task')} activeOpacity={0.8}>
             <Ionicons name="add" size={20} color={C.primary} />
           </TouchableOpacity>
-        </Animated.View>
+        </View>
 
         {total > 0 && (
-          <Animated.View entering={FadeInRight.delay(200).duration(300)} style={s.actionRow}>
+          <View style={s.actionRow}>
             <TouchableOpacity style={[s.refreshBtn, generating && s.refreshBtnDisabled]} onPress={generateAITasks} disabled={generating} activeOpacity={0.85}>
               {generating
                 ? <><ActivityIndicator size="small" color={C.primary} /><Text style={s.refreshBtnText}>Regenerating…</Text></>
@@ -192,11 +210,11 @@ export default function TodayScreen() {
                 <Text style={s.jobBtnText}>View job matches</Text>
               </TouchableOpacity>
             )}
-          </Animated.View>
+          </View>
         )}
 
         {total === 0 && (
-          <Animated.View entering={FadeInDown.delay(240).duration(350)} style={s.emptyBox}>
+          <View style={s.emptyBox}>
             <View style={s.emptyIcon}>
               <Ionicons name="sparkles-outline" size={28} color={C.primary} />
             </View>
@@ -208,57 +226,111 @@ export default function TodayScreen() {
               }
             </TouchableOpacity>
             <Text style={s.emptyHint}>or tap + to add manually</Text>
-          </Animated.View>
+          </View>
         )}
 
         <View style={{ gap: 10 }}>
-          {tasks.map((task, idx) => {
+          {tasks.map((task) => {
             const tagColor = TAG_COLORS[task.tag] ?? C.sub;
             return (
-              <Animated.View key={task.id} entering={FadeInDown.delay(idx * 40).duration(300)}>
-                <View style={[s.task, task.done && s.taskDone]}>
-                  <TouchableOpacity style={s.taskMain} onPress={() => handleToggle(task)} activeOpacity={0.7}>
-                    <View style={[s.taskStrip, { backgroundColor: tagColor }]} />
-                    <View style={[s.check, task.done && s.checkDone]}>
-                      {task.done && <Ionicons name="checkmark" size={11} color="#fff" />}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[s.taskText, task.done && s.taskTextDone]}>{task.label}</Text>
-                      {task.start_time
-                        ? <Text style={s.taskTime}><Ionicons name="time-outline" size={11} color={C.muted} /> {task.start_time}{task.end_time ? ` → ${task.end_time}` : ''}</Text>
-                        : null}
-                    </View>
-                    <View style={[s.tagPill, { backgroundColor: tagColor + '20', borderColor: tagColor + '50' }]}>
-                      <Text style={[s.tagText, { color: tagColor }]}>{task.tag}</Text>
-                    </View>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.iconBtn} onPress={() => router.push({ pathname: '/edit-task', params: { id: task.id, label: task.label, tag: task.tag, start_time: task.start_time ?? '', end_time: task.end_time ?? '' } })}>
-                    <Ionicons name="pencil-outline" size={16} color={C.muted} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.iconBtn} onPress={() => handleDelete(task.id)}>
-                    <Ionicons name="trash-outline" size={16} color={C.muted} />
-                  </TouchableOpacity>
-                </View>
-              </Animated.View>
+              <View key={task.id} style={[s.task, task.done && s.taskDone]}>
+                <View style={[s.taskStrip, { backgroundColor: tagColor }]} />
+                <TouchableOpacity style={s.taskMain} onPress={() => handleToggle(task)} activeOpacity={0.7}>
+                  <View style={[s.check, task.done && s.checkDone]}>
+                    {task.done && <Ionicons name="checkmark" size={11} color="#fff" />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.taskText, task.done && s.taskTextDone]}>{task.label}</Text>
+                    {task.start_time ? (
+                      <View style={s.taskTimeRow}>
+                        <Ionicons name="time-outline" size={11} color={C.muted} />
+                        <Text style={s.taskTime}>{task.start_time}{task.end_time ? ` → ${task.end_time}` : ''}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <View style={[s.tagPill, { backgroundColor: tagColor + '20', borderColor: tagColor + '50' }]}>
+                    <Text style={[s.tagText, { color: tagColor }]}>{task.tag}</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.iconBtn} onPress={() => router.push({ pathname: '/edit-task', params: { id: task.id, label: task.label, tag: task.tag, start_time: task.start_time ?? '', end_time: task.end_time ?? '' } })}>
+                  <Ionicons name="pencil-outline" size={16} color={C.muted} />
+                </TouchableOpacity>
+                <TouchableOpacity style={s.iconBtn} onPress={() => handleDelete(task.id)}>
+                  <Ionicons name="trash-outline" size={16} color={C.muted} />
+                </TouchableOpacity>
+              </View>
             );
           })}
         </View>
 
+        {/* DSA Problem of the Day */}
+        <TouchableOpacity style={s.dsaCard} onPress={() => router.push('/(tabs)/dsa' as any)} activeOpacity={0.85}>
+          <View style={[s.dsaIcon, { backgroundColor: CAT_COLOR[DSA_TODAY.category] + '25' }]}>
+            <Ionicons name="code-slash-outline" size={18} color={CAT_COLOR[DSA_TODAY.category]} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.dsaLabel}>DSA PROBLEM OF THE DAY</Text>
+            <Text style={s.dsaName}>{DSA_TODAY.name}</Text>
+            <Text style={s.dsaCat}>{DSA_TODAY.category}</Text>
+          </View>
+          <View style={[s.diffPill, { backgroundColor: DIFF_COLOR[DSA_TODAY.difficulty] + '25' }]}>
+            <Text style={[s.diffText, { color: DIFF_COLOR[DSA_TODAY.difficulty] }]}>{DSA_TODAY.difficulty}</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Jobs card */}
+        <TouchableOpacity style={[s.jobCard, glow(C.accent, 0.15)]} onPress={() => router.push('/(tabs)/jobs' as any)} activeOpacity={0.85}>
+          <LinearGradient colors={[C.accent + '30', C.primary + '15']} style={s.jobCardIcon}>
+            <Ionicons name="briefcase-outline" size={20} color={C.accent} />
+          </LinearGradient>
+          <View style={{ flex: 1 }}>
+            <Text style={s.jobCardTitle}>Job Opportunities</Text>
+            <Text style={s.jobCardSub}>AI-matched roles based on your stack</Text>
+          </View>
+          <Ionicons name="arrow-forward-circle" size={22} color={C.accent} />
+        </TouchableOpacity>
+
         {/* AI Morning Brief banner */}
-        <Animated.View entering={FadeInDown.delay(280).duration(350)}>
-          <TouchableOpacity style={[s.banner, glow(C.primary, 0.2)]} activeOpacity={0.85} onPress={() => router.push('/news')}>
-            <View style={s.bannerLeft}>
-              <LinearGradient colors={[C.primary + '40', C.purple + '30']} style={s.bannerIcon}>
-                <Ionicons name="sparkles" size={20} color={C.primary} />
-              </LinearGradient>
-              <View>
-                <Text style={s.bannerTitle}>AI Morning Brief ready</Text>
-                <Text style={s.bannerSub}>Latest AI news · job picks · tap to read</Text>
-              </View>
+        <TouchableOpacity style={[s.banner, glow(C.primary, 0.2)]} activeOpacity={0.85} onPress={() => router.push('/news')}>
+          <View style={s.bannerLeft}>
+            <LinearGradient colors={[C.primary + '40', C.purple + '30']} style={s.bannerIcon}>
+              <Ionicons name="sparkles" size={20} color={C.primary} />
+            </LinearGradient>
+            <View>
+              <Text style={s.bannerTitle}>AI Morning Brief ready</Text>
+              <Text style={s.bannerSub}>Latest AI news · job picks · tap to read</Text>
             </View>
-            <Ionicons name="arrow-forward-circle" size={22} color={C.primary} />
+          </View>
+          <Ionicons name="arrow-forward-circle" size={22} color={C.primary} />
+        </TouchableOpacity>
+
+        {/* Learning progress */}
+        <View style={s.learnRow}>
+          <View style={s.learnRowLeft}>
+            <Ionicons name="school-outline" size={18} color={C.primary} />
+            <Text style={s.learnRowText}>
+              <Text style={s.learnRowNum}>{learnedCount}</Text> concepts learned this week
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/learn' as any)} activeOpacity={0.8}>
+            <Text style={s.learnRowCta}>Learn more →</Text>
           </TouchableOpacity>
-        </Animated.View>
+        </View>
+
+        {/* Quick actions */}
+        <View style={s.quickRow}>
+          {([
+            { label: 'Chat AI',  icon: 'chatbubble-ellipses-outline', route: '/chat',    color: C.primary },
+            { label: 'Resume',   icon: 'document-text-outline',        route: '/resume',  color: C.accent  },
+            { label: 'News',     icon: 'newspaper-outline',            route: '/news',    color: C.warn    },
+            { label: 'Ideas',    icon: 'bulb-outline',                 route: '/ideas',   color: C.purple  },
+          ] as const).map(q => (
+            <TouchableOpacity key={q.label} style={[s.quickBtn, { borderColor: q.color + '30', backgroundColor: q.color + '10' }]} onPress={() => router.push(q.route as any)} activeOpacity={0.8}>
+              <Ionicons name={q.icon as any} size={20} color={q.color} />
+              <Text style={[s.quickBtnText, { color: q.color }]}>{q.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
       </ScrollView>
     </SafeAreaView>
@@ -313,22 +385,46 @@ const s = StyleSheet.create({
   jobBtnText:   { color: C.accent, fontWeight: '700', fontSize: 14 },
   genBtnText:   { color: '#fff', fontWeight: '700', fontSize: 14 },
 
-  task:         { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 16, overflow: 'hidden', paddingRight: 4, paddingVertical: 14 },
+  task:         { flexDirection: 'row', alignItems: 'stretch', backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 16, overflow: 'hidden', paddingRight: 4 },
   taskDone:     { opacity: 0.42 },
-  taskMain:     { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  iconBtn:      { width: 36, alignItems: 'center', justifyContent: 'center', paddingVertical: 8 },
+  taskMain:     { flex: 1, flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
+  iconBtn:      { width: 36, alignItems: 'center', justifyContent: 'center' },
   taskStrip:    { width: 4, alignSelf: 'stretch', marginRight: 14 },
   check:        { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: C.muted, marginRight: 12, alignItems: 'center', justifyContent: 'center' },
   checkDone:    { backgroundColor: C.accent, borderColor: C.accent },
   taskText:     { color: C.text, fontSize: 14 },
   taskTextDone: { textDecorationLine: 'line-through', color: C.muted },
-  taskTime:     { color: C.muted, fontSize: 11, marginTop: 3 },
+  taskTimeRow:  { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  taskTime:     { color: C.muted, fontSize: 11 },
   tagPill:      { borderRadius: 8, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3 },
   tagText:      { fontSize: 11, fontWeight: '600' },
 
-  banner:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.surface, borderWidth: 1, borderColor: C.primary + '50', borderRadius: 20, padding: 16, marginTop: 20 },
+  banner:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.surface, borderWidth: 1, borderColor: C.primary + '50', borderRadius: 20, padding: 16, marginTop: 4 },
   bannerLeft:  { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
   bannerIcon:  { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   bannerTitle: { color: C.text, fontWeight: '700', fontSize: 14 },
   bannerSub:   { color: C.muted, fontSize: 12, marginTop: 2 },
+
+  dsaCard:     { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 18, padding: 14 },
+  dsaIcon:     { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  dsaLabel:    { color: C.muted, fontSize: 10, fontWeight: '800', letterSpacing: 0.5, marginBottom: 2 },
+  dsaName:     { color: C.text, fontWeight: '700', fontSize: 14 },
+  dsaCat:      { color: C.sub, fontSize: 12, marginTop: 2 },
+  diffPill:    { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  diffText:    { fontSize: 12, fontWeight: '700' },
+
+  jobCard:     { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.surface, borderWidth: 1, borderColor: C.accent + '40', borderRadius: 20, padding: 16 },
+  jobCardIcon: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  jobCardTitle:{ color: C.text, fontWeight: '700', fontSize: 14 },
+  jobCardSub:  { color: C.muted, fontSize: 12, marginTop: 2 },
+
+  learnRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: C.surface, borderWidth: 1, borderColor: C.border, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14 },
+  learnRowLeft:{ flexDirection: 'row', alignItems: 'center', gap: 8 },
+  learnRowText:{ color: C.sub, fontSize: 13 },
+  learnRowNum: { color: C.primary, fontWeight: '800', fontSize: 15 },
+  learnRowCta: { color: C.primary, fontWeight: '700', fontSize: 13 },
+
+  quickRow:    { flexDirection: 'row', gap: 10 },
+  quickBtn:    { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 16, paddingVertical: 14 },
+  quickBtnText:{ fontSize: 11, fontWeight: '700' },
 });
