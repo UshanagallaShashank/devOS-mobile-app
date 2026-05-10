@@ -59,10 +59,48 @@ export const DAILY_CONCEPTS: DailyConcept[] = [
   { id: 'mai-04', category: 'Modern AI', title: 'Vector Databases',   tagline: 'Fast semantic search over billions of embeddings',   icon: 'flash-outline', color: '#F59E0B' },
 
   // DSA Pattern
-  { id: 'dsa-01', category: 'DSA Pattern', title: 'Sliding Window',   tagline: 'Turn O(n²) nested loops into O(n) with one pass',    icon: 'code-slash-outline', color: '#06B6D4' },
-  { id: 'dsa-02', category: 'DSA Pattern', title: 'Two Pointers',     tagline: 'Move from both ends to find pairs in O(n)',          icon: 'code-slash-outline', color: '#06B6D4' },
-  { id: 'dsa-03', category: 'DSA Pattern', title: 'Backtracking',     tagline: 'Explore all paths, undo bad choices and retry',      icon: 'code-slash-outline', color: '#06B6D4' },
-  { id: 'dsa-04', category: 'DSA Pattern', title: 'Dynamic Programming', tagline: 'Cache subproblems so you never solve them twice', icon: 'code-slash-outline', color: '#06B6D4' },
+  { id: 'dsa-01', category: 'DSA Pattern', title: 'Sliding Window',      tagline: 'Turn O(n²) nested loops into O(n) with one pass',       icon: 'code-slash-outline', color: '#06B6D4' },
+  { id: 'dsa-02', category: 'DSA Pattern', title: 'Two Pointers',        tagline: 'Move from both ends to find pairs in O(n)',              icon: 'code-slash-outline', color: '#06B6D4' },
+  { id: 'dsa-03', category: 'DSA Pattern', title: 'Backtracking',        tagline: 'Explore all paths, undo bad choices and retry',          icon: 'code-slash-outline', color: '#06B6D4' },
+  { id: 'dsa-04', category: 'DSA Pattern', title: 'Dynamic Programming', tagline: 'Cache subproblems so you never solve them twice',        icon: 'code-slash-outline', color: '#06B6D4' },
+  { id: 'dsa-05', category: 'DSA Pattern', title: 'Binary Search',       tagline: 'Halve your search space on every step',                 icon: 'code-slash-outline', color: '#06B6D4' },
+  { id: 'dsa-06', category: 'DSA Pattern', title: 'BFS & DFS',           tagline: 'Traverse trees and graphs layer by layer or deep',      icon: 'code-slash-outline', color: '#06B6D4' },
+  { id: 'dsa-07', category: 'DSA Pattern', title: 'Heap / Priority Queue', tagline: 'Always pop the min or max in O(log n)',              icon: 'code-slash-outline', color: '#06B6D4' },
+  { id: 'dsa-08', category: 'DSA Pattern', title: 'Monotonic Stack',     tagline: 'Keep a stack in sorted order to find next greater',     icon: 'code-slash-outline', color: '#06B6D4' },
+  { id: 'dsa-09', category: 'DSA Pattern', title: 'Union Find',          tagline: 'Track connected components in near O(1)',               icon: 'code-slash-outline', color: '#06B6D4' },
+  { id: 'dsa-10', category: 'DSA Pattern', title: 'Trie',                tagline: 'Prefix tree for lightning-fast string lookups',         icon: 'code-slash-outline', color: '#06B6D4' },
+
+  // System Design (extra)
+  { id: 'sd-11', category: 'System Design', title: 'WebSockets',         tagline: 'Full-duplex real-time communication over a single TCP', icon: 'git-branch-outline', color: '#6366F1' },
+  { id: 'sd-12', category: 'System Design', title: 'CDN',                tagline: 'Serve assets from the edge closest to the user',        icon: 'git-branch-outline', color: '#6366F1' },
+  { id: 'sd-13', category: 'System Design', title: 'Message Queues',     tagline: 'Decouple producers and consumers with async buffers',   icon: 'git-branch-outline', color: '#6366F1' },
+  { id: 'sd-14', category: 'System Design', title: 'Distributed Locks',  tagline: 'Coordinate access across nodes without race conditions', icon: 'git-branch-outline', color: '#6366F1' },
+  { id: 'sd-15', category: 'System Design', title: 'Bloom Filters',      tagline: 'Probabilistic set membership in constant space',        icon: 'git-branch-outline', color: '#6366F1' },
+
+  // GCP (extra)
+  { id: 'gcp-07', category: 'GCP', title: 'Cloud Storage',     tagline: 'Object storage for any scale — images, backups, data',  icon: 'cloud-outline', color: '#10B981' },
+  { id: 'gcp-08', category: 'GCP', title: 'Cloud Armor',       tagline: 'DDoS protection and WAF for your Google Cloud apps',    icon: 'cloud-outline', color: '#10B981' },
+  { id: 'gcp-09', category: 'GCP', title: 'Dataflow',          tagline: 'Unified stream and batch data processing at scale',     icon: 'cloud-outline', color: '#10B981' },
+  { id: 'gcp-10', category: 'GCP', title: 'Firebase Realtime', tagline: 'Sync data across clients in milliseconds with NoSQL',   icon: 'cloud-outline', color: '#10B981' },
+
+  // Core AI (extra)
+  { id: 'ai-07', category: 'Core AI', title: 'Tokenization',       tagline: 'How text is split into chunks a model can process',  icon: 'hardware-chip-outline', color: '#8B5CF6' },
+  { id: 'ai-08', category: 'Core AI', title: 'Context Window',     tagline: 'How much text a model can see and reason over',      icon: 'hardware-chip-outline', color: '#8B5CF6' },
+  { id: 'ai-09', category: 'Core AI', title: 'Temperature & Top-p', tagline: 'Control randomness and creativity in LLM outputs',  icon: 'hardware-chip-outline', color: '#8B5CF6' },
+  { id: 'ai-10', category: 'Core AI', title: 'RLHF',              tagline: 'Training models to align with human preferences',     icon: 'hardware-chip-outline', color: '#8B5CF6' },
+  { id: 'ai-11', category: 'Core AI', title: 'Mixture of Experts', tagline: 'Route each token to specialist sub-networks',        icon: 'hardware-chip-outline', color: '#8B5CF6' },
+
+  // Agentic AI (extra)
+  { id: 'ag-06', category: 'Agentic AI', title: 'Prompt Chaining',    tagline: 'Break complex tasks into sequential LLM calls',    icon: 'sparkles-outline', color: '#EC4899' },
+  { id: 'ag-07', category: 'Agentic AI', title: 'Guardrails',         tagline: 'Keep agents within safe, intended boundaries',     icon: 'sparkles-outline', color: '#EC4899' },
+  { id: 'ag-08', category: 'Agentic AI', title: 'Human-in-the-Loop',  tagline: 'When and how agents should ask for approval',      icon: 'sparkles-outline', color: '#EC4899' },
+  { id: 'ag-09', category: 'Agentic AI', title: 'MCP Protocol',       tagline: 'Standard interface for AI tools and context',      icon: 'sparkles-outline', color: '#EC4899' },
+
+  // Modern AI (extra)
+  { id: 'mai-05', category: 'Modern AI', title: 'Multimodal Models',   tagline: 'One model that sees, reads, and listens',          icon: 'flash-outline', color: '#F59E0B' },
+  { id: 'mai-06', category: 'Modern AI', title: 'Structured Outputs',  tagline: 'Force LLMs to return valid JSON every time',       icon: 'flash-outline', color: '#F59E0B' },
+  { id: 'mai-07', category: 'Modern AI', title: 'Semantic Caching',    tagline: 'Cache LLM responses by meaning, not exact string', icon: 'flash-outline', color: '#F59E0B' },
+  { id: 'mai-08', category: 'Modern AI', title: 'AI Observability',    tagline: 'Trace, evaluate and debug your AI pipelines',      icon: 'flash-outline', color: '#F59E0B' },
 ];
 
 export function getTodaysConcept(): DailyConcept {

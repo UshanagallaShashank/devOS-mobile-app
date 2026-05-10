@@ -6,21 +6,20 @@ import { C } from '../../config/theme';
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const TABS: { name: string; label: string; icon: IconName; iconActive: IconName }[] = [
-  { name: 'today', label: 'Today',  icon: 'home-outline',      iconActive: 'home' },
-  { name: 'learn', label: 'Learn',  icon: 'book-outline',      iconActive: 'book' },
-  { name: 'dsa',   label: 'DSA',    icon: 'code-slash-outline', iconActive: 'code-slash' },
-  { name: 'jobs',  label: 'Jobs',   icon: 'briefcase-outline', iconActive: 'briefcase' },
-  { name: 'more',  label: 'More',   icon: 'grid-outline',      iconActive: 'grid' },
+  { name: 'today', label: 'Today',  icon: 'home-outline',       iconActive: 'home'        },
+  { name: 'learn', label: 'Learn',  icon: 'book-outline',       iconActive: 'book'        },
+  { name: 'dsa',   label: 'DSA',    icon: 'code-slash-outline',  iconActive: 'code-slash'  },
+  { name: 'jobs',  label: 'Jobs',   icon: 'briefcase-outline',  iconActive: 'briefcase'   },
+  { name: 'more',  label: 'More',   icon: 'grid-outline',       iconActive: 'grid'        },
 ];
 
 function TabIcon({ name, label, focused }: { name: IconName; label: string; focused: boolean }) {
   return (
-    <View style={s.iconWrap}>
-      <View style={[s.iconBox, focused && s.iconBoxActive]}>
-        <Ionicons name={name} size={20} color={focused ? C.primary : C.muted} />
+    <View style={s.item}>
+      <View style={[s.pill, focused && s.pillActive]}>
+        <Ionicons name={name} size={22} color={focused ? C.primary : C.muted} />
       </View>
-      <Text style={[s.label, focused && s.labelActive]}>{label}</Text>
-      {focused && <View style={s.dot} />}
+      <Text style={[s.label, focused && s.labelActive]} numberOfLines={1}>{label}</Text>
     </View>
   );
 }
@@ -44,11 +43,10 @@ export default function TabLayout() {
 }
 
 const s = StyleSheet.create({
-  bar:          { backgroundColor: C.surface, borderTopColor: C.border, borderTopWidth: 1, height: 80, paddingBottom: 8, paddingTop: 8 },
-  iconWrap:     { alignItems: 'center', gap: 3, paddingTop: 2 },
-  iconBox:      { width: 40, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  iconBoxActive:{ backgroundColor: C.primary + '20' },
-  label:        { color: C.muted, fontSize: 10, fontWeight: '500' },
-  labelActive:  { color: C.primary, fontWeight: '700' },
-  dot:          { width: 4, height: 4, borderRadius: 2, backgroundColor: C.primary, marginTop: 1 },
+  bar:        { backgroundColor: C.surface, borderTopColor: C.border, borderTopWidth: 1, height: 72 },
+  item:       { alignItems: 'center', gap: 2, width: 62 },
+  pill:       { width: 46, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  pillActive: { backgroundColor: C.primary + '22' },
+  label:      { color: C.muted, fontSize: 11, fontWeight: '500', textAlign: 'center' },
+  labelActive:{ color: C.primary, fontWeight: '700' },
 });
