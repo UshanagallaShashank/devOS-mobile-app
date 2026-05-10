@@ -1,8 +1,7 @@
 import json, re
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from langchain_google_genai import ChatGoogleGenerativeAI
-from config import settings
+import llm
 
 router = APIRouter()
 
@@ -26,10 +25,8 @@ Rules:
 - Each task must be expressed in a simple short sentence (label field)
 - Assign a realistic start_time and end_time in 12-hour format like "6:00 PM" and "6:30 PM"
 - Schedule tasks across the day — morning, afternoon, and evening slots
-- Include a short why/reason phrase in the label, e.g. "to improve speed"
 - Mix task types: one DSA practice, one Learn task, one Jobs action, one Other task
 - Do not repeat any existing task from the current list
-- Treat completed tasks as already done and do not modify them
 - Tags must be exactly one of: DSA, Learn, Jobs, Resume, Other
 
 Respond ONLY with a valid JSON array, no markdown:
@@ -42,35 +39,31 @@ Respond ONLY with a valid JSON array, no markdown:
 
 @router.post("/generate")
 async def generate_tasks(req: TaskGenRequest):
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
-        google_api_key=settings.gemini_api_key,
-        temperature=0.85,
-    )
     stack_str = ', '.join(req.stack) if req.stack else 'General programming'
     existing_section = ''
     if req.existing_tasks:
-        existing_lines = '\n'.join(
+        lines = '\n'.join(
             f"- [{t.get('tag', 'Other')}] {t.get('label', '')} ({'done' if t.get('done') else 'open'})"
             for t in req.existing_tasks
         )
-        existing_section = f"\nExisting tasks:\n{existing_lines}"
+        existing_section = f"\nExisting tasks:\n{lines}"
 
-    response = llm.invoke(PROMPT.format(
-        stack=stack_str,
-        goal=req.goal or 'Grow as a developer',
-        experience=req.experience or 'Junior developer',
-        existing_section=existing_section,
-    ))
-    raw = response.content.strip()
-    raw = re.sub(r"^```(?:json)?\n?", "", raw)
+    raw = llm.call(
+        PROMPT.format(
+            stack=stack_str,
+            goal=req.goal or 'Grow as a developer',
+            experience=req.experience or 'Junior developer',
+            existing_section=existing_section,
+        ),
+        temperature=0.85,
+    )
+    raw = re.sub(r"^```(?:json)?\n?", "", raw.strip())
     raw = re.sub(r"\n?```$", "", raw)
     try:
         tasks = json.loads(raw)
         for t in tasks:
             if t.get('tag') not in VALID_TAGS:
                 t['tag'] = 'Other'
-            # ensure time fields exist (may be absent if model skipped them)
             t.setdefault('start_time', None)
             t.setdefault('end_time', None)
         return {"tasks": tasks}

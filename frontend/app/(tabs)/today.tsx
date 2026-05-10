@@ -263,6 +263,9 @@ export default function TodayScreen() {
           })}
         </View>
 
+        {/* ── Bottom sections ── */}
+        <View style={s.divider} />
+
         {/* DSA Problem of the Day */}
         <TouchableOpacity style={s.dsaCard} onPress={() => router.push('/(tabs)/dsa' as any)} activeOpacity={0.85}>
           <View style={[s.dsaIcon, { backgroundColor: CAT_COLOR[DSA_TODAY.category] + '25' }]}>
@@ -427,4 +430,5 @@ const s = StyleSheet.create({
   quickRow:    { flexDirection: 'row', gap: 10 },
   quickBtn:    { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: 16, paddingVertical: 14 },
   quickBtnText:{ fontSize: 11, fontWeight: '700' },
+  divider:     { height: 1, backgroundColor: C.border, marginVertical: 16 },
 });
