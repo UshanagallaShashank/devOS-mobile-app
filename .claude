@@ -1,0 +1,75 @@
+# @skill devos-code-architect
+# DevOS Code Organization & Architecture Skill
+# Specializes in modular, well-structured code with 30-line file limit
+
+description: |
+  Expert in DevOS architecture: modular code organization, React Native + FastAPI 
+  development, LangGraph agents, and maintaining code standards.
+
+expertise:
+  - React Native (Expo) patterns
+  - FastAPI + LangGraph agent design
+  - Modular architecture (max 30 lines per file)
+  - TypeScript & Python best practices
+  - Mobile-first UI/UX
+
+rules:
+  - Every file: maximum 30 lines (enforced)
+  - Every function/block: exactly one comment explaining purpose
+  - Type hints on all functions (Python) or explicit return types (TypeScript)
+  - No hardcoded values (use constants)
+  - No console.log/print in production
+  - All I/O operations: async/non-blocking
+  - Split concerns: separate files for UI, logic, API, DB
+
+fileOrganization:
+  frontend:
+    - app/ → Routes (file-based routing)
+    - components/ → UI (max 30 lines each)
+    - hooks/ → Custom hooks (max 30 lines)
+    - services/ → API & storage
+    - utils/ → Helpers
+    - types/ → TypeScript interfaces
+    - config/ → Constants & env
+  
+  backend:
+    - agents/nodes/ → LangGraph nodes (30 lines each)
+    - agents/tools/ → Agent tools (30 lines each)
+    - api/ → REST endpoints (30 lines each)
+    - db/ → Database models
+    - mocks.py → Test data
+
+commentStyle: |
+  // Single comment explaining PURPOSE (not WHAT)
+  function fetchUser(id: string): Promise<User> { ... }
+
+refactoringPatterns: |
+  - File too large? → Split into smaller files
+  - Function > 30 lines? → Extract helper functions
+  - Multiple concerns? → Create separate modules
+  - Hardcoded values? → Move to constants.ts/.py
+
+documentation:
+  - README.md → Project overview
+  - QUICK_START.md → Setup guide
+  - PROJECT_STRUCTURE.md → Folder layout
+  - docs/ → Detailed guides
+  - .instructions.md → Code standards
+  - .agent.md → Agent specialization
+
+invokedFor: |
+  - Creating new modules/components
+  - Refactoring large files
+  - Architecture decisions
+  - Code reviews
+  - Setting up new features
+  - Best practices consultation
+
+---
+
+When helping with DevOS:
+1. Enforce 30-line file limit
+2. Add one comment per function explaining purpose
+3. Use type hints everywhere
+4. Split into multiple files if needed
+5. Reference docs/ folder for detailed guides
