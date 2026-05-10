@@ -1,13 +1,9 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
-  FadeInDown, FadeInUp, FadeIn,
-  useSharedValue, useAnimatedStyle, withSpring, withSequence, withTiming,
-} from 'react-native-reanimated';
 import { supabase } from '../services/supabase';
 import { ENV } from '../config/env';
 import { C, glow } from '../config/theme';
@@ -33,10 +29,8 @@ export default function DailyLearnScreen() {
   const [learned,     setLearned]     = useState(false);
   const [userId,      setUserId]      = useState('');
 
-  const learnScale = useSharedValue(1);
-  const learnStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: learnScale.value }],
-  }));
+  const learnScale = new Animated.Value(1);
+  const learnStyle = { transform: [{ scale: learnScale }] };
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -74,10 +68,10 @@ export default function DailyLearnScreen() {
 
   async function markLearned() {
     if (learned || !userId) return;
-    learnScale.value = withSequence(
-      withSpring(1.12, { damping: 4 }),
-      withSpring(1, { damping: 10 }),
-    );
+    Animated.sequence([
+      Animated.spring(learnScale, { toValue: 1.12, damping: 4, useNativeDriver: true }),
+      Animated.spring(learnScale, { toValue: 1, damping: 10, useNativeDriver: true }),
+    ]).start();
     setLearned(true);
     try {
       await supabase.from('daily_learns').upsert({
@@ -100,7 +94,7 @@ export default function DailyLearnScreen() {
         style={s.headerGrad}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
       >
-        <Animated.View entering={FadeInUp.duration(300)} style={s.headerRow}>
+        <View style={s.headerRow}>
           <TouchableOpacity style={s.backBtn} onPress={() => router.back()} activeOpacity={0.7}>
             <Ionicons name="arrow-back" size={20} color={C.text} />
           </TouchableOpacity>
@@ -111,29 +105,29 @@ export default function DailyLearnScreen() {
           <TouchableOpacity style={s.refreshBtn} onPress={loadExplanation} activeOpacity={0.7} disabled={loading}>
             <Ionicons name="refresh-outline" size={18} color={C.muted} />
           </TouchableOpacity>
-        </Animated.View>
+        </View>
 
-        <Animated.Text entering={FadeInDown.delay(80).duration(350)} style={s.title}>
+        <Text style={s.title}>
           {concept.title}
-        </Animated.Text>
-        <Animated.Text entering={FadeInDown.delay(140).duration(350)} style={s.tagline}>
+        </Text>
+        <Text style={s.tagline}>
           {concept.tagline}
-        </Animated.Text>
+        </Text>
       </LinearGradient>
 
       <ScrollView style={s.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
 
         {loading && (
-          <Animated.View entering={FadeIn} style={s.loadingBox}>
+          <View style={s.loadingBox}>
             <ActivityIndicator size="large" color={concept.color} />
             <Text style={s.loadingText}>Generating explanation…</Text>
-          </Animated.View>
+          </View>
         )}
 
         {!loading && explanation && (
           <>
             {/* Analogy — the hook */}
-            <Animated.View entering={FadeInDown.delay(0).duration(400)} style={[s.analogyCard, { borderColor: concept.color + '50', backgroundColor: concept.color + '12' }]}>
+            <View style={[s.analogyCard, { borderColor: concept.color + '50', backgroundColor: concept.color + '12' }]}>
               <View style={s.analogyHeader}>
                 <View style={[s.iconBox, { backgroundColor: concept.color + '30' }]}>
                   <Ionicons name="bulb" size={16} color={concept.color} />
@@ -141,10 +135,10 @@ export default function DailyLearnScreen() {
                 <Text style={[s.cardLabel, { color: concept.color }]}>THINK OF IT LIKE…</Text>
               </View>
               <Text style={s.analogyText}>{explanation.analogy}</Text>
-            </Animated.View>
+            </View>
 
             {/* What it is */}
-            <Animated.View entering={FadeInDown.delay(60).duration(400)} style={s.card}>
+            <View style={s.card}>
               <View style={s.cardHeaderRow}>
                 <View style={[s.iconBox, { backgroundColor: C.primary + '20' }]}>
                   <Ionicons name="information-circle-outline" size={16} color={C.primary} />
@@ -152,10 +146,10 @@ export default function DailyLearnScreen() {
                 <Text style={s.cardTitle}>What It Is</Text>
               </View>
               <Text style={s.cardText}>{explanation.what_it_is}</Text>
-            </Animated.View>
+            </View>
 
             {/* How it works */}
-            <Animated.View entering={FadeInDown.delay(120).duration(400)} style={s.card}>
+            <View style={s.card}>
               <View style={s.cardHeaderRow}>
                 <View style={[s.iconBox, { backgroundColor: C.accent + '20' }]}>
                   <Ionicons name="layers-outline" size={16} color={C.accent} />
@@ -170,10 +164,10 @@ export default function DailyLearnScreen() {
                   <Text style={s.stepText}>{step}</Text>
                 </View>
               ))}
-            </Animated.View>
+            </View>
 
             {/* Real world */}
-            <Animated.View entering={FadeInDown.delay(180).duration(400)} style={s.card}>
+            <View style={s.card}>
               <View style={s.cardHeaderRow}>
                 <View style={[s.iconBox, { backgroundColor: C.warn + '20' }]}>
                   <Ionicons name="globe-outline" size={16} color={C.warn} />
@@ -181,11 +175,11 @@ export default function DailyLearnScreen() {
                 <Text style={s.cardTitle}>Real World</Text>
               </View>
               <Text style={s.cardText}>{explanation.real_world}</Text>
-            </Animated.View>
+            </View>
 
             {/* Code hint */}
             {explanation.code_hint && (
-              <Animated.View entering={FadeInDown.delay(240).duration(400)} style={s.codeCard}>
+              <View style={s.codeCard}>
                 <View style={s.cardHeaderRow}>
                   <View style={[s.iconBox, { backgroundColor: C.purple + '20' }]}>
                     <Ionicons name="code-slash-outline" size={16} color={C.purple} />
@@ -193,11 +187,11 @@ export default function DailyLearnScreen() {
                   <Text style={[s.cardTitle, { color: C.purple }]}>Code Glimpse</Text>
                 </View>
                 <Text style={s.codeText}>{explanation.code_hint}</Text>
-              </Animated.View>
+              </View>
             )}
 
             {/* Dev insight */}
-            <Animated.View entering={FadeInDown.delay(300).duration(400)} style={[s.insightCard, { borderColor: C.pink + '50', backgroundColor: C.pink + '10' }]}>
+            <View style={[s.insightCard, { borderColor: C.pink + '50', backgroundColor: C.pink + '10' }]}>
               <View style={s.cardHeaderRow}>
                 <View style={[s.iconBox, { backgroundColor: C.pink + '25' }]}>
                   <Ionicons name="star-outline" size={16} color={C.pink} />
@@ -205,19 +199,19 @@ export default function DailyLearnScreen() {
                 <Text style={[s.cardTitle, { color: C.pink }]}>Senior Dev Insight</Text>
               </View>
               <Text style={s.cardText}>{explanation.dev_insight}</Text>
-            </Animated.View>
+            </View>
 
             {/* Remember this */}
-            <Animated.View entering={FadeInDown.delay(360).duration(400)} style={[s.rememberCard, { borderColor: concept.color + '60', backgroundColor: concept.color + '15' }]}>
+            <View style={[s.rememberCard, { borderColor: concept.color + '60', backgroundColor: concept.color + '15' }]}>
               <Ionicons name="bookmark" size={16} color={concept.color} />
               <Text style={[s.rememberText, { color: concept.color }]}>{explanation.remember_this}</Text>
-            </Animated.View>
+            </View>
           </>
         )}
 
         {/* Mark as learned */}
         {!loading && explanation && (
-          <Animated.View entering={FadeInDown.delay(420).duration(400)} style={s.learnWrap}>
+          <View style={s.learnWrap}>
             <Animated.View style={learnStyle}>
               <TouchableOpacity
                 style={[
@@ -245,7 +239,7 @@ export default function DailyLearnScreen() {
               <Ionicons name="chatbubble-ellipses-outline" size={15} color={C.sub} />
               <Text style={s.askBtnText}>Ask DevOS AI more about this</Text>
             </TouchableOpacity>
-          </Animated.View>
+          </View>
         )}
 
       </ScrollView>

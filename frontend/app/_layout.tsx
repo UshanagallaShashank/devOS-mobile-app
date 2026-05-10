@@ -1,8 +1,10 @@
+const _err = console.error.bind(console);
+console.error = (...a: unknown[]) => { if (typeof a[0] === 'string' && a[0].includes('expo-notifications')) return; _err(...a); };
+
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from '../services/supabase';
 import type { Session } from '@supabase/supabase-js';
 import { C } from '../config/theme';
@@ -46,7 +48,7 @@ export default function RootLayout() {
   if (!ready) return <SplashScreen />;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <View style={{ flex: 1 }}>
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
@@ -61,7 +63,7 @@ export default function RootLayout() {
         <Stack.Screen name="profile"  options={{ presentation: 'modal' }} />
         <Stack.Screen name="chat"     options={{ presentation: 'modal' }} />
       </Stack>
-    </GestureHandlerRootView>
+    </View>
   );
 }
 

@@ -3,6 +3,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from config import settings
+from db.session import get_session
+from db.models import ConceptExplanation
 
 router = APIRouter()
 
@@ -66,6 +68,13 @@ Respond ONLY with valid JSON, no markdown:
 
 @router.post("/explain")
 async def explain_concept(req: ExplainRequest):
+    cache_key = f"{req.concept}:{req.category}"
+
+    with get_session() as db:
+        cached = db.get(ConceptExplanation, cache_key)
+        if cached:
+            return cached.data
+
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash",
         google_api_key=settings.gemini_api_key,
@@ -76,6 +85,11 @@ async def explain_concept(req: ExplainRequest):
     raw = re.sub(r"^```(?:json)?\n?", "", raw)
     raw = re.sub(r"\n?```$", "", raw)
     try:
-        return json.loads(raw)
+        result = json.loads(raw)
     except json.JSONDecodeError:
         raise HTTPException(500, "AI returned invalid JSON. Please try again.")
+
+    with get_session() as db:
+        db.merge(ConceptExplanation(concept_key=cache_key, data=result))
+
+    return result

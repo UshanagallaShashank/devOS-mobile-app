@@ -50,3 +50,10 @@ class JobCache(Base):
 
     cache_key = Column(String, primary_key=True)
     last_fetched_at = Column(DateTime(timezone=True), default=utcnow)
+
+class ConceptExplanation(Base):
+    __tablename__ = 'concept_explanations'
+
+    concept_key = Column(String, primary_key=True)  # "{concept}:{category}"
+    data        = Column(JSON, nullable=False)
+    created_at  = Column(DateTime(timezone=True), default=utcnow)
